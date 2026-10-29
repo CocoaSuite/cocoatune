@@ -28,7 +28,8 @@
       "target": [
         "zip",
         "nsis"
-      ]
+      ],
+      "artifactName": "CocoaTune-Windows.${ext}"
     },
     "mac": {
       "target": "dmg"

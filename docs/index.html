@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en" data-l="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CocoaTune: a music player that takes any link</title>
+<meta name="description" content="CocoaTune is a small music player for Windows. Paste a link from YouTube, SoundCloud, Google Drive or anywhere else, and the song lands in a library that lives in your cloud.">
+<meta name="theme-color" content="#14100D">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%222%202%2060%2060%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M48%2010C43.5%205.9%2038.5%204%2032%204C16.5%204%204%2016.5%204%2032C4%2047.5%2016.5%2060%2032%2060C38.5%2060%2043.5%2058.1%2048%2054L40%2044C37.8%2046%2035.3%2047%2032%2047C23.7%2047%2017%2040.3%2017%2032C17%2023.7%2023.7%2017%2032%2017C35.3%2017%2037.8%2018%2040%2020L48%2010Z%22%20fill%3D%22%23D70C0C%22/%3E%3Cpath%20d%3D%22M36.0001%2022H39.0001C39.0001%2025%2045.0001%2025%2045.0001%2030C42.0001%2030%2040.0001%2028%2039.0001%2028V37C39.0001%2041%2035.0001%2043%2031.0001%2042C27.0001%2041%2028.0001%2037%2031.0001%2035C33.0001%2034%2035.0001%2034%2036.0001%2035V22Z%22%20fill%3D%22%23D70C0C%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+ --night:#14100D;--slab:#161616;--panel:#1c1c1c;--line:#2b2522;--paper:#F4EEE6;
+ --cream:#F6F1EB;--ink:#1E1612;--red:#D70C0C;--red2:#F0402F;--mute:#9C8F84;--mute2:#6E6259;
+ --disp:'Unbounded',system-ui,sans-serif;--sans:'Manrope',system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+ --pad:clamp(16px,5vw,72px);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--night);color:var(--cream);font:17px/1.55 var(--sans);overflow-x:hidden}
+a{color:inherit}
+html[data-l=en] [lang=ru],html[data-l=ru] [lang=en]{display:none!important}
+.wrap{max-width:1320px;margin:0 auto;padding:0 var(--pad)}
+.mono{font-family:var(--mono);font-size:12.5px;letter-spacing:.02em}
+
+/* top */
+.top{display:flex;align-items:center;justify-content:space-between;padding-top:22px;padding-bottom:22px}
+.logo{display:block;height:40px;width:auto;margin-left:-4px}
+.logo .m{fill:var(--red)}.logo .w{fill:var(--cream)}
+.top nav{display:flex;align-items:center;gap:26px;font-size:15px}
+.top nav a{text-decoration:none;color:var(--mute)}
+.top nav a:hover{color:var(--cream)}
+.lang{display:flex;border:1px solid var(--line);border-radius:999px;padding:3px}
+.lang button{all:unset;cursor:pointer;font:500 12px var(--mono);padding:4px 9px;border-radius:999px;color:var(--mute)}
+.lang button[aria-pressed=true]{background:var(--cream);color:var(--ink)}
+.lang button:focus-visible{outline:2px solid var(--red2)}
+
+/* hero */
+.hero{padding-top:clamp(40px,9vh,110px)}
+h1{font:700 clamp(40px,7.4vw,112px)/.98 var(--disp);letter-spacing:-.035em;margin:0;max-width:12ch}
+html[data-l=ru] h1{font-size:clamp(34px,6.4vw,98px);max-width:12ch}
+h1 em{font-style:normal;color:var(--red2)}
+.lede{display:grid;grid-template-columns:minmax(0,34rem) auto;gap:40px 64px;align-items:end;margin-top:44px}
+.lede p{margin:0;color:#CFC3B8;font-size:clamp(17px,1.5vw,19px)}
+.lede b{color:var(--cream)}
+.cta{display:flex;flex-wrap:wrap;gap:12px 14px;align-items:flex-start}
+.btn{display:inline-flex;align-items:center;gap:10px;text-decoration:none;font:700 16px var(--sans);padding:16px 22px;border-radius:12px;transition:transform .15s,background .15s}
+.btn:active{transform:translateY(1px)}
+.btn.pri{background:var(--cream);color:var(--ink)}
+.btn.pri:hover{background:#fff}
+.btn.sec{border:1.5px solid #3a302a;color:var(--cream)}
+.btn.sec:hover{border-color:var(--mute2);background:#1b1612}
+.btn:focus-visible{outline:2px solid var(--red2);outline-offset:3px}
+.arrow{width:16px;height:16px;flex:none}
+
+/* player slab */
+.stage{margin:clamp(56px,9vh,96px) 0 0;position:relative}
+.pl{position:relative;background:var(--slab);border:1px solid #262626;border-radius:14px;overflow:hidden;color:#ececec;box-shadow:0 40px 80px -40px rgba(0,0,0,.8)}
+.pl-top{display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid #262626;background:var(--panel);min-height:58px}
+.pl-tag{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:#8f8f8f;flex:none}
+.pl-q{flex:1;min-width:0;background:#101010;border:1px solid #2c2c2c;border-radius:9px;padding:9px 13px;font:14px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.caret{display:inline-block;width:2px;height:1.05em;background:var(--red2);vertical-align:-2px;margin-left:1px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.pl-ok{font:500 12px var(--mono);color:#9fd8b9;flex:none;opacity:0;transform:translateY(4px);transition:.25s}
+.pl-ok.on{opacity:1;transform:none}
+.lib{list-style:none;margin:0;padding:0 16px;height:calc(5 * 56px);overflow:hidden}
+.lib li{display:grid;grid-template-columns:28px minmax(0,1fr) 22px 56px;gap:14px;align-items:center;height:56px;border-bottom:1px solid #232323;animation:in .45s cubic-bezier(.2,1.2,.4,1) both}
+@keyframes in{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+.lib .n,.lib .d{font:12.5px var(--mono)}
+.lib .n{color:#6b6b6b;text-align:right}
+.lib .t{min-width:0}
+.lib .t div{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib .t small{display:block;font:12px var(--mono);color:#7a7a7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib .bar{height:2px;background:#2c2c2c;margin-top:5px;overflow:hidden}
+.lib .bar i{display:block;height:100%;width:0;background:var(--red);transition:width 1.2s ease-out}
+.lib .st{width:18px;height:18px;color:#5a5a5a;transition:color .3s}
+.lib .st.c{color:var(--red2)}
+.lib .d{text-align:right;color:#8f8f8f}
+.lib li.cur{background:#1d1d1d;box-shadow:inset 3px 0 var(--red)}
+.lib li.cur .n{color:var(--red2)}
+.now{display:flex;align-items:center;gap:16px;padding:14px 16px;border-top:1px solid #262626;background:var(--panel)}
+.now .pb{width:40px;height:40px;border-radius:9px;background:var(--red);display:grid;place-items:center;flex:none}
+.now .pb svg{width:16px;height:16px}
+.now .np{flex:1;min-width:0}
+.now .np div{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+.now .np span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now .np small{color:#8f8f8f;flex:none}
+.prog{height:3px;background:#2c2c2c;margin-top:8px}
+.prog i{display:block;height:100%;background:var(--red);width:0;animation:prog 26s linear infinite}
+@keyframes prog{to{width:100%}}
+.stage figcaption{display:flex;justify-content:space-between;gap:20px;margin-top:14px;color:var(--mute2)}
+
+/* paste (paper) */
+.paper{background:var(--paper);color:var(--ink);margin-top:clamp(90px,14vh,160px)}
+.talk{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:56px;padding-top:clamp(72px,11vh,130px);padding-bottom:clamp(72px,11vh,130px)}
+h2{font:700 clamp(30px,3.9vw,56px)/1.02 var(--disp);letter-spacing:-.03em;margin:0}
+.talk .side p{color:#5A4A3F;max-width:30rem;margin:26px 0 0}
+.talk .side .mono{display:block;color:var(--red);margin-bottom:22px;text-transform:uppercase;letter-spacing:.1em}
+.links{list-style:none;margin:0;padding:0;border-top:1.5px solid var(--ink)}
+.links li{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:6px 18px;align-items:baseline;padding:20px 0;border-bottom:1px solid #D6CABB}
+.links .n{color:#9b8b7d}
+.links .url{font:500 clamp(15px,1.45vw,19px)/1.3 var(--mono);letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.links .url b{font-weight:500;color:var(--ink)}
+.links .url s{text-decoration:none;color:#9b8b7d}
+.links .did{color:var(--red);text-align:right;white-space:nowrap}
+.links .did:before{content:"→ ";color:#b9a796}
+.note{margin-top:22px;color:#7d6d60;font-size:14.5px}
+
+/* box (dark ledger) */
+.box{padding-top:clamp(80px,12vh,140px);padding-bottom:clamp(40px,6vh,70px)}
+.box h2{margin-bottom:46px}
+.ledger{display:grid;grid-template-columns:1fr 1fr;column-gap:64px;border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:52px 1fr;gap:4px 16px;padding:26px 0 28px;border-bottom:1px solid var(--line)}
+.row .t{grid-row:span 2;font:500 11px var(--mono);color:var(--night);background:var(--c,#555);border-radius:5px;height:22px;display:grid;place-items:center;margin-top:3px}
+.row h3{margin:0;font:700 19px var(--sans);letter-spacing:-.01em}
+.row p{margin:0;color:var(--mute);font-size:15.5px}
+
+/* promise */
+.promise{padding-top:clamp(70px,10vh,120px);padding-bottom:clamp(70px,10vh,120px)}
+.promise h2{font-size:clamp(34px,5.6vw,84px);max-width:15ch}
+.promise h2 .dim{color:var(--mute2)}
+.facts{display:flex;flex-wrap:wrap;gap:10px 34px;margin-top:34px;color:var(--mute)}
+.facts span:before{content:"";display:inline-block;width:6px;height:6px;background:var(--red2);border-radius:1px;margin-right:10px;vertical-align:2px}
+
+/* end */
+.end{border-top:1px solid var(--line);padding-top:60px;padding-bottom:40px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:40px}
+.end h2{font-size:clamp(28px,3.4vw,46px)}
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;padding-top:26px;padding-bottom:34px;color:var(--mute2);border-top:1px solid var(--line);margin-top:40px}
+.foot a{color:var(--mute);text-decoration:none}.foot a:hover{color:var(--cream)}
+
+@media (max-width:900px){
+ .lede{grid-template-columns:1fr}
+ .talk{grid-template-columns:1fr;gap:40px}
+ .ledger{grid-template-columns:1fr}
+ .top nav .hide-s{display:none}
+}
+@media (max-width:620px){
+ body{font-size:16px}
+ .logo{height:32px}
+ .pl-top{flex-wrap:wrap;gap:10px}
+ .pl-q{flex-basis:100%;order:3;font-size:13px}
+ .pl-ok{margin-left:auto}
+ .lib{padding:0 12px}
+ .lib li{grid-template-columns:20px minmax(0,1fr) 18px 44px;gap:10px}
+ .links li{grid-template-columns:34px minmax(0,1fr)}
+ .links .did{grid-column:2;text-align:left;white-space:normal}
+ .stage figcaption{flex-direction:column;gap:4px}
+ .btn{width:100%;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="wrap top">
+ <a href="./" aria-label="CocoaTune"><svg class="logo" viewBox="3 3 233 58" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CocoaTune"><path d="M48 10C43.5 5.9 38.5 4 32 4C16.5 4 4 16.5 4 32C4 47.5 16.5 60 32 60C38.5 60 43.5 58.1 48 54L40 44C37.8 46 35.3 47 32 47C23.7 47 17 40.3 17 32C17 23.7 23.7 17 32 17C35.3 17 37.8 18 40 20L48 10Z" class="m"/><path d="M36.0001 22H39.0001C39.0001 25 45.0001 25 45.0001 30C42.0001 30 40.0001 28 39.0001 28V37C39.0001 41 35.0001 43 31.0001 42C27.0001 41 28.0001 37 31.0001 35C33.0001 34 35.0001 34 36.0001 35V22Z" class="m"/><path d="M61.482 46.54C58.89 46.54 56.67 45.976 54.822 44.848C52.974 43.708 51.552 42.124 50.556 40.096C49.572 38.068 49.08 35.716 49.08 33.04C49.08 30.364 49.572 28.012 50.556 25.984C51.552 23.956 52.974 22.378 54.822 21.25C56.67 20.11 58.89 19.54 61.482 19.54C64.47 19.54 66.96 20.29 68.952 21.79C70.944 23.278 72.342 25.288 73.146 27.82L68.772 29.026C68.268 27.334 67.41 26.014 66.198 25.066C64.986 24.106 63.414 23.626 61.482 23.626C59.742 23.626 58.29 24.016 57.126 24.796C55.974 25.576 55.104 26.674 54.516 28.09C53.94 29.494 53.646 31.144 53.634 33.04C53.634 34.936 53.922 36.592 54.498 38.008C55.086 39.412 55.962 40.504 57.126 41.284C58.29 42.064 59.742 42.454 61.482 42.454C63.414 42.454 64.986 41.974 66.198 41.014C67.41 40.054 68.268 38.734 68.772 37.054L73.146 38.26C72.342 40.792 70.944 42.808 68.952 44.308C66.96 45.796 64.47 46.54 61.482 46.54ZM84.6041 46.54C82.6601 46.54 80.9621 46.102 79.5101 45.226C78.0581 44.35 76.9301 43.144 76.1261 41.608C75.3341 40.06 74.9381 38.284 74.9381 36.28C74.9381 34.24 75.3461 32.452 76.1621 30.916C76.9781 29.38 78.1121 28.18 79.5641 27.316C81.0161 26.452 82.6961 26.02 84.6041 26.02C86.5601 26.02 88.2641 26.458 89.7161 27.334C91.1681 28.21 92.2961 29.422 93.1001 30.97C93.9041 32.506 94.3061 34.276 94.3061 36.28C94.3061 38.296 93.8981 40.078 93.0821 41.626C92.2781 43.162 91.1501 44.368 89.6981 45.244C88.2461 46.108 86.5481 46.54 84.6041 46.54ZM84.6041 42.472C86.3321 42.472 87.6161 41.896 88.4561 40.744C89.2961 39.592 89.7161 38.104 89.7161 36.28C89.7161 34.396 89.2901 32.896 88.4381 31.78C87.5861 30.652 86.3081 30.088 84.6041 30.088C83.4401 30.088 82.4801 30.352 81.7241 30.88C80.9801 31.396 80.4281 32.122 80.0681 33.058C79.7081 33.982 79.5281 35.056 79.5281 36.28C79.5281 38.164 79.9541 39.67 80.8061 40.798C81.6701 41.914 82.9361 42.472 84.6041 42.472ZM105.634 46.54C103.63 46.54 101.92 46.096 100.504 45.208C99.088 44.308 98.002 43.084 97.246 41.536C96.502 39.988 96.124 38.236 96.112 36.28C96.124 34.288 96.514 32.524 97.282 30.988C98.062 29.44 99.166 28.228 100.594 27.352C102.022 26.464 103.72 26.02 105.688 26.02C107.896 26.02 109.762 26.578 111.286 27.694C112.822 28.798 113.824 30.31 114.292 32.23L109.972 33.4C109.636 32.356 109.078 31.546 108.298 30.97C107.518 30.382 106.63 30.088 105.634 30.088C104.506 30.088 103.576 30.358 102.844 30.898C102.112 31.426 101.572 32.158 101.224 33.094C100.876 34.03 100.702 35.092 100.702 36.28C100.702 38.128 101.116 39.622 101.944 40.762C102.772 41.902 104.002 42.472 105.634 42.472C106.786 42.472 107.692 42.208 108.352 41.68C109.024 41.152 109.528 40.39 109.864 39.394L114.292 40.384C113.692 42.364 112.642 43.888 111.142 44.956C109.642 46.012 107.806 46.54 105.634 46.54ZM124.878 46.54C122.934 46.54 121.236 46.102 119.784 45.226C118.332 44.35 117.204 43.144 116.4 41.608C115.608 40.06 115.212 38.284 115.212 36.28C115.212 34.24 115.62 32.452 116.436 30.916C117.252 29.38 118.386 28.18 119.838 27.316C121.29 26.452 122.97 26.02 124.878 26.02C126.834 26.02 128.538 26.458 129.99 27.334C131.442 28.21 132.57 29.422 133.374 30.97C134.178 32.506 134.58 34.276 134.58 36.28C134.58 38.296 134.172 40.078 133.356 41.626C132.552 43.162 131.424 44.368 129.972 45.244C128.52 46.108 126.822 46.54 124.878 46.54ZM124.878 42.472C126.606 42.472 127.89 41.896 128.73 40.744C129.57 39.592 129.99 38.104 129.99 36.28C129.99 34.396 129.564 32.896 128.712 31.78C127.86 30.652 126.582 30.088 124.878 30.088C123.714 30.088 122.754 30.352 121.998 30.88C121.254 31.396 120.702 32.122 120.342 33.058C119.982 33.982 119.802 35.056 119.802 36.28C119.802 38.164 120.228 39.67 121.08 40.798C121.944 41.914 123.21 42.472 124.878 42.472ZM142.902 46.54C141.498 46.54 140.31 46.276 139.338 45.748C138.366 45.208 137.628 44.494 137.124 43.606C136.632 42.718 136.386 41.74 136.386 40.672C136.386 39.736 136.542 38.896 136.854 38.152C137.166 37.396 137.646 36.748 138.294 36.208C138.942 35.656 139.782 35.206 140.814 34.858C141.594 34.606 142.506 34.378 143.55 34.174C144.606 33.97 145.746 33.784 146.97 33.616C148.206 33.436 149.496 33.244 150.84 33.04L149.292 33.922C149.304 32.578 149.004 31.588 148.392 30.952C147.78 30.316 146.748 29.998 145.296 29.998C144.42 29.998 143.574 30.202 142.758 30.61C141.942 31.018 141.372 31.72 141.048 32.716L137.088 31.474C137.568 29.83 138.48 28.51 139.824 27.514C141.18 26.518 143.004 26.02 145.296 26.02C147.024 26.02 148.542 26.302 149.85 26.866C151.17 27.43 152.148 28.354 152.784 29.638C153.132 30.322 153.342 31.024 153.414 31.744C153.486 32.452 153.522 33.226 153.522 34.066V46H149.724V41.788L150.354 42.472C149.478 43.876 148.452 44.908 147.276 45.568C146.112 46.216 144.654 46.54 142.902 46.54ZM143.766 43.084C144.75 43.084 145.59 42.91 146.286 42.562C146.982 42.214 147.534 41.788 147.942 41.284C148.362 40.78 148.644 40.306 148.788 39.862C149.016 39.31 149.142 38.68 149.166 37.972C149.202 37.252 149.22 36.67 149.22 36.226L150.552 36.622C149.244 36.826 148.122 37.006 147.186 37.162C146.25 37.318 145.446 37.468 144.774 37.612C144.102 37.744 143.508 37.894 142.992 38.062C142.488 38.242 142.062 38.452 141.714 38.692C141.366 38.932 141.096 39.208 140.904 39.52C140.724 39.832 140.634 40.198 140.634 40.618C140.634 41.098 140.754 41.524 140.994 41.896C141.234 42.256 141.582 42.544 142.038 42.76C142.506 42.976 143.082 43.084 143.766 43.084Z" class="w"/><path d="M161.211 46V24.148H152.823V20.08H173.937V24.148H165.549V46H161.211ZM181.232 46.558C179.792 46.558 178.604 46.318 177.668 45.838C176.732 45.358 175.988 44.746 175.436 44.002C174.884 43.258 174.476 42.466 174.212 41.626C173.948 40.786 173.774 39.994 173.69 39.25C173.618 38.494 173.582 37.882 173.582 37.414V26.56H177.974V35.92C177.974 36.52 178.016 37.198 178.1 37.954C178.184 38.698 178.376 39.418 178.676 40.114C178.988 40.798 179.444 41.362 180.044 41.806C180.656 42.25 181.478 42.472 182.51 42.472C183.062 42.472 183.608 42.382 184.148 42.202C184.688 42.022 185.174 41.716 185.606 41.284C186.05 40.84 186.404 40.234 186.668 39.466C186.932 38.698 187.064 37.726 187.064 36.55L189.638 37.648C189.638 39.304 189.314 40.804 188.666 42.148C188.03 43.492 187.088 44.566 185.84 45.37C184.592 46.162 183.056 46.558 181.232 46.558ZM187.586 46V39.97H187.064V26.56H191.42V46H187.586ZM208.844 46V36.64C208.844 36.028 208.801 35.35 208.717 34.606C208.633 33.862 208.436 33.148 208.124 32.464C207.824 31.768 207.368 31.198 206.756 30.754C206.156 30.31 205.34 30.088 204.308 30.088C203.756 30.088 203.21 30.178 202.67 30.358C202.13 30.538 201.637 30.85 201.193 31.294C200.762 31.726 200.413 32.326 200.15 33.094C199.885 33.85 199.754 34.822 199.754 36.01L197.18 34.912C197.18 33.256 197.497 31.756 198.133 30.412C198.782 29.068 199.73 28 200.978 27.208C202.226 26.404 203.762 26.002 205.586 26.002C207.025 26.002 208.214 26.242 209.15 26.722C210.086 27.202 210.829 27.814 211.382 28.558C211.934 29.302 212.342 30.094 212.605 30.934C212.87 31.774 213.038 32.572 213.109 33.328C213.193 34.072 213.236 34.678 213.236 35.146V46H208.844ZM195.361 46V26.56H199.232V32.59H199.754V46H195.361ZM225.374 46.54C223.406 46.54 221.678 46.114 220.19 45.262C218.702 44.41 217.538 43.228 216.698 41.716C215.87 40.204 215.456 38.464 215.456 36.496C215.456 34.372 215.864 32.53 216.68 30.97C217.496 29.398 218.63 28.18 220.082 27.316C221.534 26.452 223.214 26.02 225.122 26.02C227.138 26.02 228.848 26.494 230.252 27.442C231.668 28.378 232.718 29.704 233.402 31.42C234.086 33.136 234.344 35.158 234.176 37.486H229.874V35.902C229.862 33.79 229.49 32.248 228.758 31.276C228.026 30.304 226.874 29.818 225.302 29.818C223.526 29.818 222.206 30.37 221.342 31.474C220.478 32.566 220.046 34.168 220.046 36.28C220.046 38.248 220.478 39.772 221.342 40.852C222.206 41.932 223.466 42.472 225.122 42.472C226.19 42.472 227.108 42.238 227.876 41.77C228.656 41.29 229.256 40.6 229.676 39.7L233.96 40.996C233.216 42.748 232.064 44.11 230.504 45.082C228.956 46.054 227.246 46.54 225.374 46.54ZM218.678 37.486V34.21H232.052V37.486H218.678Z" class="m"/></svg></a>
+ <nav>
+  <a class="hide-s" href="#paste"><span lang="en">How it works</span><span lang="ru">Как это работает</span></a>
+  <a class="hide-s" href="#box"><span lang="en">Features</span><span lang="ru">Что умеет</span></a>
+  <div class="lang" role="group" aria-label="Language"><button data-set="en" aria-pressed="true">EN</button><button data-set="ru" aria-pressed="false">RU</button></div>
+ </nav>
+</header>
+
+<main>
+<section class="wrap hero">
+ <h1><span lang="en">A music player that takes <em>any&nbsp;link.</em></span><span lang="ru">Плеер, который берёт <em>любую ссылку.</em></span></h1>
+ <div class="lede">
+  <p><span lang="en">Paste a link from YouTube, SoundCloud, Google Drive or a plain .mp3, and the song is in your library. The library lives in <b>your Google Drive or Yandex Disk</b>, so it plays on any computer you sign in on.</span><span lang="ru">Вставь ссылку с YouTube, SoundCloud, Google Диска или прямую на .mp3, и песня уже в библиотеке. А библиотека живёт <b>на твоём Google Диске или Яндекс Диске</b>, так что играет на любом компьютере, где ты вошёл.</span></p>
+  <div class="cta">
+   <a class="btn pri" href="https://github.com/CocoaSuite/cocoatune/releases/download/latest/CocoaTune-Windows.exe"><span lang="en">Download for Windows</span><span lang="ru">Скачать для Windows</span><svg class="arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v9M4 8.5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+   <a class="btn sec" href="https://github.com/CocoaSuite/cocoatune/releases/download/latest/CocoaTune-Windows.zip"><span lang="en">Portable .zip</span><span lang="ru">Портативная .zip</span></a>
+  </div>
+ </div>
+
+ <figure class="stage">
+  <div class="pl" aria-hidden="true">
+   <div class="pl-top"><span class="pl-tag">Link</span><span class="pl-q"><span id="typed"></span><i class="caret"></i></span><span class="pl-ok" id="ok"></span></div>
+   <ol class="lib" id="lib"></ol>
+   <div class="now">
+    <span class="pb"><svg viewBox="0 0 16 16" fill="#F6F1EB"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg></span>
+    <div class="np"><div><span id="nowT">Late Night Loop</span><small class="mono">Google Drive</small></div><div class="prog"><i></i></div></div>
+   </div>
+  </div>
+  <figcaption class="mono"><span lang="en">Video sites, music sites, cloud drives, a plain file. One box for all of them.</span><span lang="ru">Видеосайты, музыкальные сайты, облака, обычный файл. Одно поле для всего.</span><span lang="en">Every song goes to your cloud.</span><span lang="ru">Каждая песня уходит в твоё облако.</span></figcaption>
+ </figure>
+</section>
+
+<section class="paper" id="paste">
+ <div class="wrap talk">
+  <div class="side">
+   <span class="mono"><span lang="en">Paste list</span><span lang="ru">Что можно вставить</span></span>
+   <h2><span lang="en">Paste it. That’s the whole manual.</span><span lang="ru">Вставь ссылку. Это вся инструкция.</span></h2>
+   <p><span lang="en">No formats to pick, no converter sites, no folders to sort. CocoaTune finds the audio, names the song and puts it in the library.</span><span lang="ru">Не надо выбирать формат, искать конвертер и раскладывать по папкам. CocoaTune сам найдёт звук, назовёт песню и положит её в библиотеку.</span></p>
+  </div>
+  <div>
+   <ol class="links">
+    <li><span class="n mono">001</span><span class="url"><b>youtube.com</b><s>/watch?v=…</s></span><span class="did mono"><span lang="en">Audio from video</span><span lang="ru">Звук из видео</span></span></li>
+    <li><span class="n mono">002</span><span class="url"><b>soundcloud.com</b><s>/artist/track</s></span><span class="did mono"><span lang="en">Track</span><span lang="ru">Трек</span></span></li>
+    <li><span class="n mono">003</span><span class="url"><b>drive.google.com</b><s>/file/d/…</s></span><span class="did mono"><span lang="en">Shared file</span><span lang="ru">Общий файл</span></span></li>
+    <li><span class="n mono">004</span><span class="url"><b>disk.yandex.ru</b><s>/d/…</s></span><span class="did mono"><span lang="en">Public link</span><span lang="ru">Публичная ссылка</span></span></li>
+    <li><span class="n mono">005</span><span class="url"><b>bandcamp.com</b><s>/track/…</s></span><span class="did mono"><span lang="en">Track</span><span lang="ru">Трек</span></span></li>
+    <li><span class="n mono">006</span><span class="url"><b>site.com</b><s>/song.mp3</s></span><span class="did mono"><span lang="en">Plain file</span><span lang="ru">Обычный файл</span></span></li>
+   </ol>
+   <p class="note"><span lang="en">Songs already on your computer? Drag them onto the window.</span><span lang="ru">Песни уже на компьютере? Перетащи их в окно.</span></p>
+  </div>
+ </div>
+</section>
+
+<section class="wrap box" id="box">
+ <h2><span lang="en">What’s in the player</span><span lang="ru">Что внутри</span></h2>
+ <div class="ledger">
+  <div class="row" style="--c:var(--red2)"><span class="t">CL</span><h3><span lang="en">Library in your cloud</span><span lang="ru">Библиотека в твоём облаке</span></h3><p><span lang="en">Songs and playlists live in Google Drive or Yandex Disk. Sign in on another computer and everything is there.</span><span lang="ru">Песни и плейлисты хранятся на Google Диске или Яндекс Диске. Войди на другом компьютере, и всё на месте.</span></p></div>
+  <div class="row" style="--c:#5fb58a"><span class="t">▶</span><h3><span lang="en">Plays straight from the cloud</span><span lang="ru">Играет прямо из облака</span></h3><p><span lang="en">No waiting for downloads. Songs you play often stay on the PC and work offline.</span><span lang="ru">Не надо ждать загрузки. Песни, которые ты часто слушаешь, остаются на компьютере и играют без интернета.</span></p></div>
+  <div class="row" style="--c:#cfc3b8"><span class="t">PL</span><h3><span lang="en">Playlists</span><span lang="ru">Плейлисты</span></h3><p><span lang="en">Make one, drop songs in. They follow the library to every computer.</span><span lang="ru">Создай плейлист и добавь песни. Он переезжает вместе с библиотекой на любой компьютер.</span></p></div>
+  <div class="row" style="--c:#7aa7e0"><span class="t">SH</span><h3><span lang="en">One library for two</span><span lang="ru">Одна библиотека на двоих</span></h3><p><span lang="en">Point two players at the same shared folder and you both get the same songs.</span><span lang="ru">Выбери одну общую папку на двух компьютерах, и у вас будут одни и те же песни.</span></p></div>
+  <div class="row" style="--c:#e8a15c"><span class="t">▭</span><h3><span lang="en">Mini bar</span><span lang="ru">Мини-плеер</span></h3><p><span lang="en">Shrink it to a strip above the taskbar. It stays on top of every window.</span><span lang="ru">Сверни в полоску над панелью задач. Она остаётся поверх всех окон.</span></p></div>
+  <div class="row" style="--c:#b49be0"><span class="t">Aa</span><h3><span lang="en">Your colors</span><span lang="ru">Свои цвета</span></h3><p><span lang="en">Six themes, or pick your own accent, background and text.</span><span lang="ru">Шесть тем или свой акцент, фон и цвет текста.</span></p></div>
+ </div>
+</section>
+
+<section class="wrap promise">
+ <h2><span lang="en">Your music on every computer you use. <span class="dim">Not just this one.</span></span><span lang="ru">Твоя музыка на каждом твоём компьютере. <span class="dim">Не только на этом.</span></span></h2>
+ <div class="facts mono"><span lang="en">Google Drive</span><span lang="ru">Google Диск</span><span lang="en">Yandex Disk</span><span lang="ru">Яндекс Диск</span><span lang="en">Plays offline</span><span lang="ru">Играет без интернета</span><span lang="en">No account of ours</span><span lang="ru">Без нашего аккаунта</span></div>
+</section>
+
+<section class="wrap">
+ <div class="end">
+  <h2><span lang="en">Got a link handy?</span><span lang="ru">Есть ссылка под рукой?</span></h2>
+  <div class="cta">
+   <a class="btn pri" href="https://github.com/CocoaSuite/cocoatune/releases/download/latest/CocoaTune-Windows.exe"><span lang="en">Download for Windows</span><span lang="ru">Скачать для Windows</span><svg class="arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v9M4 8.5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+   <a class="btn sec" href="https://github.com/CocoaSuite/cocoatune/releases/download/latest/CocoaTune-Windows.zip"><span lang="en">Portable .zip</span><span lang="ru">Портативная .zip</span></a>
+  </div>
+ </div>
+ <footer class="foot mono">
+  <span><span lang="en">CocoaTune is part of Cocoa Suite. Save only what you have the right to keep.</span><span lang="ru">CocoaTune входит в Cocoa Suite. Сохраняй только то, что тебе можно хранить.</span></span>
+  <a href="https://github.com/CocoaSuite">github.com/CocoaSuite</a>
+ </footer>
+</section>
+</main>
+
+<script>
+(()=>{
+const H=document.documentElement,B=[...document.querySelectorAll('.lang button')];
+function setL(l){H.dataset.l=l;H.lang=l;B.forEach(b=>b.setAttribute('aria-pressed',b.dataset.set===l));try{localStorage.setItem('ct-site-l',l)}catch(e){}}
+let l0='en';try{l0=localStorage.getItem('ct-site-l')||((navigator.language||'').startsWith('ru')?'ru':'en')}catch(e){}
+setL(l0);B.forEach(b=>b.onclick=()=>setL(b.dataset.set));
+
+const CL='<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 13A3.5 3.5 0 0 1 4 6.03 4.5 4.5 0 0 1 12.7 7 3 3 0 0 1 12 13z"/></svg>';
+const lib=document.getElementById('lib'),typed=document.getElementById('typed'),ok=document.getElementById('ok');
+const base=[['Late Night Loop','Google Drive','3:42'],['Menu Theme','Yandex Disk','1:55'],['Ambient Field','Google Drive','6:31'],['Boss Phase 2','Google Drive','4:08'],['Old Demo','Yandex Disk','3:20']];
+const links=[
+ {u:'youtube.com/watch?v=Qx7mD1rP',t:'Rain Sketch (live)',s:'youtube.com',d:'4:12'},
+ {u:'soundcloud.com/mira/slow-tide',t:'Slow Tide',s:'soundcloud.com',d:'3:05'},
+ {u:'drive.google.com/file/d/1hX9vQ…',t:'demo_final_v3',s:'drive.google.com',d:'2:47'},
+ {u:'disk.yandex.ru/d/Kp2aZ8',t:'Ночной поезд',s:'disk.yandex.ru',d:'5:18'},
+ {u:'files.example.com/morning-set.mp3',t:'morning-set',s:'files.example.com',d:'41:20'},
+];
+let n=0;
+function row(t,s,d,fresh){const li=document.createElement('li');li.innerHTML='<span class="n"></span><span class="t"><div></div><small></small>'+(fresh?'<div class="bar"><i></i></div>':'')+'</span><span class="st'+(fresh?'':' c')+'">'+CL+'</span><span class="d"></span>';
+ li.querySelector('.t div').textContent=t;li.querySelector('small').textContent=s;li.querySelector('.d').textContent=fresh?'—':d;return li}
+function renum(){[...lib.children].forEach((li,i)=>{li.querySelector('.n').textContent=i+1;li.classList.toggle('cur',li.querySelector('.t div').textContent==='Late Night Loop')})}
+function reset(){lib.innerHTML='';base.forEach(b=>lib.appendChild(row(...b)));renum()}
+reset();
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){typed.textContent=links[0].u;return}
+(async function loop(){
+ for(;;){for(const L of links){const ru=H.dataset.l==='ru';ok.classList.remove('on');
+   for(let i=typed.textContent.length;i>0;i-=2){typed.textContent=typed.textContent.slice(0,Math.max(0,i-2));await wait(12)}
+   await wait(350);
+   for(let i=1;i<=L.u.length;i++){typed.textContent=L.u.slice(0,i);await wait(26+Math.random()*40)}
+   await wait(380);
+   const li=row(L.t,L.s,L.d,true);lib.prepend(li);while(lib.children.length>5)lib.lastChild.remove();renum();
+   await wait(60);li.querySelector('.bar i').style.width='100%';
+   await wait(1300);
+   li.querySelector('.bar').remove();li.querySelector('.st').classList.add('c');li.querySelector('.d').textContent=L.d;
+   ok.textContent=ru?'✓ В облаке · '+L.d:'✓ In your cloud · '+L.d;ok.classList.add('on');
+   await wait(2200)}
+  await wait(600);reset()}
+})();
+})();
+</script>
+</body>
+</html>
