@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self' file:; img-src 'self' data:; style-src 'self'">
+<title>CocoaTune</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg class="defs" width="0" height="0">
+  <symbol id="i-pin" viewBox="0 0 16 16"><path fill="currentColor" d="M5 1h6v1l-1 1v4l3 3v1H9v4l-1 1-1-1v-4H3v-1l3-3V3L5 2z"/></symbol>
+  <symbol id="i-min" viewBox="0 0 16 16"><rect fill="currentColor" x="2" y="11" width="12" height="3"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16"><path fill="currentColor" d="M2 3h12v2H2zM2 7h12v2H2zM2 11h12v2H2z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 16 16"><path fill="currentColor" d="M3.4 2 8 6.6 12.6 2 14 3.4 9.4 8l4.6 4.6-1.4 1.4L8 9.4 3.4 14 2 12.6 6.6 8 2 3.4z"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 16 16"><path fill="currentColor" d="M2 3h2v10H2zM14 3v10L5 8z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 16 16"><path fill="currentColor" d="M12 3h2v10h-2zM2 3v10l9-5z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 16 16"><path fill="currentColor" d="M4 2v12l10-6z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 16 16"><path fill="currentColor" d="M4 3h3v10H4zM9 3h3v10H9z"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 16 16"><path fill="currentColor" d="M1 4h3l6 8h3v-2l3 3-3 3v-2h-4L3 6H1zM1 12h2l2-2.7 1.2 1.6L4 14H1zM10 4h3V2l3 3-3 3V6h-2L9.3 8.4 8 6.7z"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 16 16"><path fill="currentColor" d="M3 5h8V3l3 3-3 3V7H5v2H3zM13 11H5v2l-3-3 3-3v2h6V7h2z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><path fill="currentColor" d="M2 7h3v3H2zM6.5 7h3v3h-3zM11 7h3v3h-3z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><path fill="currentColor" d="M7 1a6 6 0 0 1 4.7 9.7l3.3 3.3-1.4 1.4-3.3-3.3A6 6 0 1 1 7 1zm0 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></symbol>
+</svg>
+
+<div id="full" class="app">
+  <header class="drag">
+    <img class="logo" src="logo.svg" alt="CocoaTune">
+    <span class="sp"></span>
+    <button id="pin" class="ib" title="Display on top"><svg><use href="#i-pin"/></svg></button>
+    <button id="toMini" class="ib" title="Minimize to bar"><svg><use href="#i-min"/></svg></button>
+    <button id="menu" class="ib" title="Menu"><svg><use href="#i-menu"/></svg></button>
+    <button id="close" class="ib" title="Close"><svg><use href="#i-close"/></svg></button>
+  </header>
+
+  <form id="linkForm" class="bar">
+    <input id="link" class="in" placeholder="Paste a link to save…" autocomplete="off" spellcheck="false">
+    <button class="b r" type="submit">Save</button>
+    <button id="addFiles" class="b g" type="button">+ Files</button>
+  </form>
+
+  <nav class="tabs">
+    <div id="tabList" class="tabList"></div>
+    <label class="search"><svg><use href="#i-search"/></svg><input id="q" placeholder="Search" spellcheck="false"></label>
+  </nav>
+
+  <div id="list" class="list"></div>
+  <div id="toast" class="toast"></div>
+
+  <footer class="pl">
+    <div class="now"><b id="nowTitle">Nothing playing</b><span id="nowTime">0:00 / 0:00</span></div>
+    <div id="prog" class="prog"><i id="progFill"></i></div>
+    <div class="ctl">
+      <button id="shuffle" class="cb m" title="Shuffle"><svg><use href="#i-shuffle"/></svg></button>
+      <button id="prev" class="cb" title="Previous"><svg><use href="#i-prev"/></svg></button>
+      <button id="play" class="pb" title="Play"><svg><use href="#i-play"/></svg></button>
+      <button id="next" class="cb" title="Next"><svg><use href="#i-next"/></svg></button>
+      <button id="repeat" class="cb m" title="Repeat"><svg><use href="#i-repeat"/></svg><em>1</em></button>
+    </div>
+  </footer>
+</div>
+
+<div id="mini" class="mini drag">
+  <img class="mark" src="mark.svg" alt="">
+  <div class="mt"><b id="miniTitle">Nothing playing</b><small id="miniTime">0:00 / 0:00</small></div>
+  <button id="mPrev" class="ib" title="Previous"><svg><use href="#i-prev"/></svg></button>
+  <button id="mPlay" class="pbs" title="Play"><svg><use href="#i-play"/></svg></button>
+  <button id="mNext" class="ib" title="Next"><svg><use href="#i-next"/></svg></button>
+  <button id="expand" class="ib" title="Expand"><svg><use href="#i-expand"/></svg></button>
+  <div class="p2"><i id="miniFill"></i></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

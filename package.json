@@ -1,0 +1,23 @@
+{
+  "name": "cocoatune",
+  "productName": "CocoaTune",
+  "version": "0.1.0",
+  "description": "CocoaSuite music player: local files, saved links and playlists.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.cocoasuite.cocoatune",
+    "productName": "CocoaTune",
+    "files": ["main.js", "preload.js", "ytdlp.js", "src/**"],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  }
+}
