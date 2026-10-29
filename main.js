@@ -3,10 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
 const crypto = require('crypto');
-const { pathToFileURL } = require('url');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 const ytdlp = require('./ytdlp');
+const cloud = require('./cloud');
+
+cloud.registerScheme();
 
 const FULL = { width: 400, height: 560 };
 const MINI = { width: 340, height: 44 };
@@ -52,7 +54,11 @@ function saveDb() {
 
 function state() {
   return {
-    tracks: db.tracks.map(t => ({ ...t, url: pathToFileURL(path.join(audioDir(), t.file)).href })),
+    tracks: db.tracks.map(t => ({
+      id: t.id, title: t.title, source: t.source, origin: t.origin, duration: t.duration, link: t.link,
+      url: `ctune://track/${t.id}`, where: cloud.where(t),
+    })),
+    cloud: cloud.info(),
     playlists: db.playlists,
     jobs: [...jobs.values()],
     pinned,
@@ -73,7 +79,9 @@ function push() {
   }, 50);
 }
 
-function changed() { saveDb(); push(); }
+function changed() { saveDb(); push(); cloud.scheduleSync(); }
+function quietSave() { saveDb(); push(); }
+const toast = m => { if (win && !win.isDestroyed()) win.webContents.send('toast', m); };
 
 // ---------- adding audio ----------
 async function importPaths(paths) {
@@ -83,10 +91,12 @@ async function importPaths(paths) {
     const id = uid();
     const file = `${id}.${ext}`;
     await fsp.copyFile(p, path.join(audioDir(), file));
-    db.tracks.push({
+    const t = {
       id, title: path.basename(p, path.extname(p)), source: 'local', origin: ext,
       file, duration: 0, added: Date.now(),
-    });
+    };
+    db.tracks.push(t);
+    cloud.added(t);
   }
   changed();
 }
@@ -96,14 +106,31 @@ function nameFromResponse(res, url) {
   const m = cd.match(/filename\*=UTF-8''([^;]+)/i) || cd.match(/filename="?([^";]+)"?/i);
   let name = m ? m[1] : path.posix.basename(new URL(url).pathname);
   try { name = decodeURIComponent(name); } catch { /* keep raw */ }
-  return name.replace(/\.[a-z0-9]{2,5}$/i, '') || new URL(url).hostname;
+  return name;
+}
+const stripExt = n => n.replace(/\.[a-z0-9]{2,5}$/i, '');
+
+// Turns Google Drive and Yandex Disk share links into direct download links.
+async function resolveShare(url) {
+  const h = url.hostname.replace(/^www\./, '');
+  if (h === 'drive.google.com' || h === 'docs.google.com') {
+    const id = (url.pathname.match(/\/d\/([\w-]{10,})/) || [])[1] || url.searchParams.get('id');
+    if (id) return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`;
+  }
+  if (/^(disk\.yandex\.[a-z.]+|yadi\.sk|disk\.360\.yandex\.[a-z.]+)$/.test(h)) {
+    const r = await fetch('https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=' + encodeURIComponent(url.href));
+    if (!r.ok) throw new Error('This Yandex Disk link is not public or no longer exists');
+    return (await r.json()).href;
+  }
+  return null;
 }
 
 // Direct audio files are streamed straight to disk; anything else returns null.
 async function tryDirect(url, id, onProgress) {
   const res = await fetch(url, { redirect: 'follow' });
   const type = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-  const pathExt = path.extname(new URL(res.url).pathname).slice(1).toLowerCase();
+  const name = nameFromResponse(res, url);
+  const pathExt = (path.extname(name).slice(1) || path.extname(new URL(res.url).pathname).slice(1)).toLowerCase();
   const isAudio = type.startsWith('audio/') || type === 'application/ogg' ||
     ((type === 'application/octet-stream' || !type) && AUDIO_EXT.has(pathExt));
   if (!res.ok || !isAudio) { await res.body?.cancel().catch(() => {}); return null; }
@@ -115,7 +142,7 @@ async function tryDirect(url, id, onProgress) {
   const body = Readable.fromWeb(res.body);
   body.on('data', c => { got += c.length; if (total) onProgress(got / total); });
   await pipeline(body, fs.createWriteStream(path.join(audioDir(), file)));
-  return { file, title: nameFromResponse(res, url), duration: 0 };
+  return { file, title: stripExt(name) || new URL(url).hostname, duration: 0 };
 }
 
 async function saveLink(raw) {
@@ -130,16 +157,20 @@ async function saveLink(raw) {
   const onProgress = p => { job.progress = Math.min(1, p); push(); };
 
   try {
-    let got = await tryDirect(url.href, id, onProgress).catch(() => null);
+    const shared = await resolveShare(url);
+    let got = await tryDirect(shared || url.href, id, onProgress).catch(e => { if (shared) throw e; return null; });
+    if (shared && !got) throw new Error('That shared file is not audio');
     if (!got) {
       job.title = 'Preparing…';
       push();
       got = await ytdlp.download(url.href, audioDir(), id, onProgress);
     }
-    db.tracks.push({
+    const t = {
       id, title: got.title || url.hostname, source: 'link', origin: url.hostname,
       link: url.href, file: got.file, duration: got.duration || 0, added: Date.now(),
-    });
+    };
+    db.tracks.push(t);
+    cloud.added(t);
   } finally {
     jobs.delete(id);
     changed();
@@ -152,11 +183,16 @@ async function deleteTrack(id) {
   const { response } = await dialog.showMessageBox(win, {
     type: 'question', buttons: ['Delete', 'Cancel'], defaultId: 1, cancelId: 1,
     message: `Delete "${t.title}" from the library?`,
+    detail: t.cloud?.owned ? 'It will also be moved to the trash in the cloud, for everyone who shares this library.'
+      : t.cloud ? 'The original file stays in your cloud.' : undefined,
   });
   if (response !== 0) return;
+  cloud.removed(t);
   db.tracks = db.tracks.filter(x => x.id !== id);
-  for (const p of db.playlists) p.trackIds = p.trackIds.filter(x => x !== id);
-  await fsp.unlink(path.join(audioDir(), t.file)).catch(() => {});
+  for (const p of db.playlists) {
+    if (p.trackIds.includes(id)) { p.trackIds = p.trackIds.filter(x => x !== id); p.t = Date.now(); }
+  }
+  if (cloud.isHere(t)) await fsp.unlink(path.join(audioDir(), t.file)).catch(() => {});
   changed();
 }
 
@@ -244,7 +280,7 @@ ipcMain.handle('import-paths', (_, paths) => importPaths(paths));
 ipcMain.handle('save-link', (_, url) => saveLink(url));
 ipcMain.handle('set-duration', (_, id, d) => {
   const t = db.tracks.find(x => x.id === id);
-  if (t && d > 0) { t.duration = d; changed(); }
+  if (t && d > 0 && Math.abs((t.duration || 0) - d) > 0.5) { t.duration = d; quietSave(); }
 });
 ipcMain.handle('set-pinned', (_, on) => {
   pinned = !!on;
@@ -258,11 +294,22 @@ ipcMain.handle('set-theme', (_, t) => {
   const ok = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
   if (t && ok(t.accent) && ok(t.bg) && ok(t.text)) { db.theme = { accent: t.accent, bg: t.bg, text: t.text }; saveDb(); }
 });
+ipcMain.handle('cloud-connect', (_, p) => cloud.connect(p));
+ipcMain.handle('cloud-signout', (_, p) => cloud.signOut(p));
+ipcMain.handle('cloud-use', (_, p) => cloud.useProvider(p));
+ipcMain.handle('cloud-set', (_, o) => cloud.set(o || {}));
+ipcMain.handle('cloud-folder-google', () => cloud.pickGoogleFolder());
+ipcMain.handle('cloud-folder-set', (_, f) => cloud.setFolder(f && typeof f.id === 'string' ? { id: f.id, name: String(f.name || f.id) } : null));
+ipcMain.handle('cloud-list', (_, p, dir) => cloud.list(p, dir));
+ipcMain.handle('cloud-add', (_, p, files) => cloud.addCloudFiles(p, Array.isArray(files) ? files : []));
+ipcMain.handle('cloud-pick-google', () => cloud.pickGoogleFiles());
+ipcMain.handle('cloud-move-all', () => cloud.moveAll());
+ipcMain.handle('cloud-sync', () => cloud.syncNow());
 ipcMain.handle('create-shortcuts', (_, o) => createShortcuts(o || {}));
 ipcMain.handle('dismiss-welcome', () => { db.welcomeDone = true; saveDb(); });
 
 ipcMain.handle('playlist-create', (_, name) => {
-  const p = { id: uid(), name: String(name).trim().slice(0, 60) || 'Playlist', trackIds: [] };
+  const p = { id: uid(), name: String(name).trim().slice(0, 60) || 'Playlist', trackIds: [], t: Date.now() };
   db.playlists.push(p);
   changed();
   return p.id;
@@ -277,11 +324,11 @@ ipcMain.handle('track-menu', (_, id, playlistId) => {
     submenu: db.playlists.map(p => ({
       label: p.name,
       enabled: !p.trackIds.includes(id),
-      click: () => { p.trackIds.push(id); changed(); },
+      click: () => { p.trackIds.push(id); p.t = Date.now(); changed(); },
     })),
   }];
   const pl = db.playlists.find(p => p.id === playlistId);
-  if (pl) items.push({ label: `Remove from ${pl.name}`, click: () => { pl.trackIds = pl.trackIds.filter(x => x !== id); changed(); } });
+  if (pl) items.push({ label: `Remove from ${pl.name}`, click: () => { pl.trackIds = pl.trackIds.filter(x => x !== id); pl.t = Date.now(); changed(); } });
   if (t.link) items.push({ label: 'Open source link', click: () => shell.openExternal(t.link) });
   items.push({ type: 'separator' }, { label: 'Delete from library…', click: () => deleteTrack(id) });
   if (db.playlists.length === 0) items[0].submenu = [{ label: 'No playlists yet', enabled: false }];
@@ -293,13 +340,14 @@ ipcMain.handle('playlist-menu', (_, id) => {
   if (!p) return;
   Menu.buildFromTemplate([{
     label: `Delete playlist "${p.name}"`,
-    click: () => { db.playlists = db.playlists.filter(x => x.id !== id); changed(); },
+    click: () => { db.playlists = db.playlists.filter(x => x.id !== id); cloud.playlistRemoved(id); changed(); },
   }]).popup({ window: win });
 });
 
 ipcMain.handle('app-menu', () => {
   Menu.buildFromTemplate([
     { label: 'Add files…', click: importDialog },
+    { label: 'Add from cloud…', click: () => win.webContents.send('open-cloud-import') },
     { label: 'Settings', click: () => win.webContents.send('open-settings') },
     { label: 'Open library folder', click: () => shell.openPath(dataDir()) },
     {
@@ -326,6 +374,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     if (process.platform === 'win32') app.setAppUserModelId('com.cocoasuite.cocoatune');
     await loadDb();
+    cloud.init({ db: () => db, audioDir, save: quietSave, push, uid, toast });
     createWindow();
     ytdlp.update().catch(() => {}); // quiet background refresh
   });

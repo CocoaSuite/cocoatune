@@ -17,6 +17,10 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+      - name: Write cloud keys
+        env:
+          CT_KEYS: ${{ secrets.CT_KEYS }}
+        run: node -e "require('fs').writeFileSync('keys.json', process.env.CT_KEYS || '{}')"
       - run: npx electron-builder --win zip nsis --publish never
       - uses: softprops/action-gh-release@v2
         with:

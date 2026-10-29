@@ -49,9 +49,30 @@ function renderTabs() {
     ...S.playlists.map(p => [p.id, p.name])];
   if (!tabs.some(t => t[0] === view)) view = 'all';
   const box = $('tabList');
-  box.innerHTML = tabs.map(([id, label]) =>
+  if (box.querySelector('.newPl')) return; // a playlist name is being typed
+  setHtml(box, tabs.map(([id, label]) =>
     `<button class="tab${id === view ? ' a' : ''}" data-view="${esc(id)}">${esc(label)}</button>`).join('') +
-    '<button class="tab add" id="addPl" title="New playlist">+</button>';
+    '<button class="tab add" id="addPl" title="New playlist">+</button>');
+}
+
+const STORE = {
+  pc: ['i-pc', '', 'On this PC only'],
+  up: ['i-cloud-up', '', 'Waiting to upload'],
+  cloud: ['i-cloud', ' c', 'In the cloud · streams when played'],
+  both: ['i-cloud-ok', ' c', 'In the cloud · saved on this PC'],
+};
+function storeIcon(t) {
+  if (!S.cloud?.p) return '';
+  const [ic, cls, tip] = STORE[t.where] || STORE.pc;
+  return `<span class="st${cls}" title="${tip}"><svg><use href="#${ic}"/></svg></span>`;
+}
+
+// Replaces markup only when it changed, so frequent state updates don't swallow clicks.
+function setHtml(el, html) {
+  if (el._html === html) return false;
+  el._html = html;
+  el.innerHTML = html;
+  return true;
 }
 
 function renderList() {
@@ -68,7 +89,7 @@ function renderList() {
     const sub = t.source === 'local' ? `local · ${t.origin}` : t.origin;
     rows.push(`<div class="row${t.id === cur ? ' cur' : ''}" data-id="${t.id}">
       <span class="n">${i + 1}</span><div class="t"><div>${esc(t.title)}</div><small>${esc(sub)}</small></div>
-      ${t.source === 'link' ? '<span class="tag">LINK</span>' : ''}<span class="d">${t.duration ? fmt(t.duration) : '—'}</span>
+      ${t.source === 'link' ? '<span class="tag">LINK</span>' : ''}${storeIcon(t)}<span class="d">${t.duration ? fmt(t.duration) : '—'}</span>
       <button class="more" title="More"><svg><use href="#i-more"/></svg></button></div>`);
   });
   if (!rows.length) {
@@ -77,7 +98,7 @@ function renderList() {
       ? 'This playlist is empty.<br>Use ⋯ on a track to add it here.'
       : 'Drop audio files here, use + Files,<br>or paste a link above.'}</div>`);
   }
-  box.innerHTML = rows.join('');
+  if (!setHtml(box, rows.join(''))) return;
   // Job progress widths are set through CSSOM so the CSP stays strict.
   box.querySelectorAll('.bar2 i').forEach(i => { i.style.width = i.dataset.w + '%'; });
 }
@@ -111,7 +132,7 @@ function renderTime() {
   $('miniFill').style.width = pct + '%';
 }
 
-function render() { renderTabs(); renderList(); renderPlayer(); }
+function render() { renderTabs(); renderList(); renderPlayer(); renderCloud(); }
 
 // ---------- playback ----------
 function play(id, list) {
@@ -168,7 +189,7 @@ audio.addEventListener('error', () => { if (cur) toast("This track couldn't be p
 // Fill in missing durations one at a time in the background.
 const probing = new Set();
 function probeDurations() {
-  const t = S.tracks.find(x => !x.duration && !probing.has(x.id));
+  const t = S.tracks.find(x => !x.duration && x.where !== 'cloud' && !probing.has(x.id));
   if (!t) return;
   probing.add(t.id);
   const a = new Audio();
@@ -176,7 +197,7 @@ function probeDurations() {
   const done = () => { a.removeAttribute('src'); a.load(); probeDurations(); };
   a.onloadedmetadata = () => { if (isFinite(a.duration)) api.setDuration(t.id, a.duration); done(); };
   a.onerror = done;
-  a.src = t.url;
+  a.src = t.url + '?probe=1';
 }
 
 // ---------- seeking ----------
@@ -244,7 +265,9 @@ function newPlaylistInput(btn) {
     finished = true;
     const name = input.value.trim();
     if (ok && name) view = await api.createPlaylist(name);
-    renderTabs();
+    input.remove();
+    $('tabList')._html = null;
+    render();
   };
   input.onkeydown = e => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); };
   input.onblur = () => finish(true);
@@ -354,6 +377,7 @@ $('wCreate').onclick = () => {
 
 applyTheme(DEFAULT_THEME);
 api.onToast(toast);
+api.onOpenCloudImport(() => { api.setMini(false); openDlg('import', S.cloud?.p || 'g'); });
 let themeLoaded = false;
 api.onState(s => {
   S = s;
@@ -367,3 +391,184 @@ api.onState(s => {
   render();
   probeDurations();
 });
+
+// ---------- cloud ----------
+const PN = { g: 'Google Drive', y: 'Yandex Disk' };
+const busy = new Set();
+
+async function act(key, fn, okMsg) {
+  if (busy.has(key)) return;
+  busy.add(key);
+  renderCloud();
+  try { const r = await fn(); if (okMsg) toast(typeof okMsg === 'function' ? okMsg(r) : okMsg); return r; }
+  catch (e) { toast(e.message || e); }
+  finally { busy.delete(key); renderCloud(); }
+}
+
+function chipText(c) {
+  return {
+    syncing: ['i-cloud', 'Syncing…'], synced: ['i-cloud-ok', `${PN[c.p]} · synced`], offline: ['i-cloud-off', 'Offline'],
+    auth: ['i-cloud-off', 'Sign in again'], error: ['i-cloud-off', 'Sync problem'],
+  }[c.status] || ['i-cloud', PN[c.p]];
+}
+
+function renderCloud() {
+  const c = S.cloud;
+  if (!c) return;
+  document.body.classList.toggle('has-cloud', !!c.p);
+  const [ic, txt] = chipText(c);
+  icon($('cloudChip'), ic.slice(2));
+  $('cloudChip').querySelector('span').textContent = txt;
+  $('cloudChip').classList.toggle('warn', ['offline', 'auth', 'error'].includes(c.status));
+  $('cloudChip').title = c.error || 'Cloud library';
+
+  document.body.classList.toggle('has-pill', !!c.upload);
+  if (c.upload) {
+    $('upText').textContent = `Uploading ${c.upload.n} song${c.upload.n === 1 ? '' : 's'}`;
+    $('upFill').style.width = (c.upload.progress * 100).toFixed(1) + '%';
+    $('upPct').textContent = Math.round(c.upload.progress * 100) + '%';
+  }
+
+  const prov = p => {
+    const on = c.connected[p], active = c.p === p, b = busy.has('c' + p);
+    const sub = !c.configured[p] ? 'Not available in this build'
+      : on ? (c.accounts[p] || 'Connected') + (active ? '' : ' · not used for the library')
+      : b ? 'Finish signing in in your browser…' : 'Not connected';
+    const btns = !c.configured[p] ? ''
+      : on ? (active ? '' : `<button class="b g" data-use="${p}">Use</button>`) + `<button class="b g" data-out="${p}">Sign out</button>`
+      : `<button class="b r" data-in="${p}"${b ? ' disabled' : ''}>${b ? 'Waiting…' : 'Connect'}</button>`;
+    return `<div class="prov"><span class="lg ${p}">${p === 'g' ? 'G' : 'Я'}</span><div>${PN[p]}<small${active ? ' class="act"' : ''}>${esc(sub)}</small></div><span class="btns">${btns}</span></div>`;
+  };
+  const off = c.p ? '' : ' off';
+  const seg = (key, opts) => `<span class="seg${off}">${opts.map(([v, l]) => `<button data-${key}="${v}" class="${c[key] === v ? 'on' : ''}">${l}</button>`).join('')}</span>`;
+  const err = c.p && ['offline', 'auth', 'error'].includes(c.status) && c.error ? `<p class="hint err">${esc(c.error)}</p>` : '';
+  setHtml($('cloudSet'), prov('g') + prov('y') +
+    `<div class="sRow"><span>Library folder</span><span class="fold"><em>${esc(c.folder.name)}${c.folder.custom ? '' : ' (only you)'}</em>` +
+    (c.p ? `<button class="b g" id="cfChange">Change…</button>` : '') + (c.folder.custom ? `<button class="b g" id="cfReset">Reset</button>` : '') + `</span></div>` +
+    `<p class="hint">Pick a shared folder to share the library with someone else.</p>` +
+    `<div class="sRow"><span>Store new music</span>${seg('store', [['local', 'This PC'], ['cloud', 'Cloud']])}</div>` +
+    `<div class="sRow"><span>Offline copies</span>${seg('offline', [['none', 'None'], ['recent', 'Recent 2 GB'], ['all', 'All']])}</div>` +
+    `<p class="hint">Cloud songs stream when you play them. Recently played songs are kept on this PC so they play offline.</p>` + err +
+    `<div class="cloudBtns">` +
+    (c.p && c.localCount ? `<button class="b g" id="cMove">Move ${c.localCount} song${c.localCount === 1 ? '' : 's'} from this PC to the cloud</button>` : '') +
+    (c.p ? `<button class="b g" id="cSync">${c.status === 'syncing' ? 'Syncing…' : 'Sync now'}</button>` : '') + `</div>`);
+}
+
+$('cloudChip').onclick = () => document.body.classList.add('is-settings');
+$('cloudSet').onclick = e => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  const d = b.dataset, cl = api.cloud;
+  if (d.in) act('c' + d.in, () => cl.connect(d.in), `${PN[d.in]} connected`);
+  else if (d.out) { if (confirm(`Sign out of ${PN[d.out]}? Songs that are only in the cloud won't play until you sign in again.`)) act('o', () => cl.signOut(d.out)); }
+  else if (d.use) act('u', () => cl.use(d.use), `Library now uses ${PN[d.use]}`);
+  else if (d.store) cl.set({ store: d.store });
+  else if (d.offline) cl.set({ offline: d.offline });
+  else if (b.id === 'cfChange') S.cloud.p === 'g' ? act('f', () => cl.folderGoogle()) : openDlg('folder', 'y');
+  else if (b.id === 'cfReset') act('f', () => cl.folderSet(null));
+  else if (b.id === 'cMove') act('m', () => cl.moveAll());
+  else if (b.id === 'cSync') act('s', () => cl.sync());
+};
+
+// Dialog for adding cloud files (import) or choosing a Yandex Disk folder (folder).
+const D = { mode: 'import', p: 'g', dir: 'disk:/', items: null, picked: new Set(), loading: false };
+const kb = n => n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.ceil(n / 1e3)) + ' KB';
+const AUD = /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|webm|weba)$/i;
+
+function openDlg(mode, p) {
+  Object.assign(D, { mode, p, dir: 'disk:/', items: null, picked: new Set() });
+  document.body.classList.add('is-dlg');
+  renderDlg();
+  if (p === 'y' && S.cloud?.connected.y) loadDir();
+}
+function closeDlg() { document.body.classList.remove('is-dlg'); }
+
+async function loadDir() {
+  D.loading = true; D.items = null; renderDlg();
+  try { D.items = await api.cloud.list('y', D.dir); }
+  catch (e) { D.items = { error: e.message || String(e) }; }
+  D.loading = false; renderDlg();
+}
+
+function renderDlg() {
+  const c = S.cloud || { connected: {} };
+  const folder = D.mode === 'folder';
+  $('cdTitle').textContent = folder ? 'Choose a library folder' : 'Add from cloud';
+  $('cdTabs').innerHTML = folder ? '' : ['g', 'y'].map(p => `<button data-p="${p}" class="${D.p === p ? 'on' : ''}">${PN[p]}</button>`).join('');
+  const list = $('cdList'), msg = $('cdMsg'), ok = $('cdOk');
+  list.innerHTML = ''; msg.innerHTML = ''; $('cdPath').textContent = ''; $('cdInfo').textContent = '';
+  ok.hidden = false;
+
+  if (!c.connected[D.p]) {
+    msg.innerHTML = `Connect ${PN[D.p]} first.<br><button class="b r" id="cdConnect">${busy.has('c' + D.p) ? 'Waiting…' : 'Connect'}</button>`;
+    ok.hidden = true;
+    return;
+  }
+  if (D.p === 'g') {
+    msg.textContent = 'Google Drive opens its own file picker in your browser. Pick songs there and they’re added here. They stay in your Drive.';
+    ok.textContent = busy.has('pg') ? 'Waiting…' : 'Choose in Google Drive…';
+    return;
+  }
+  $('cdPath').textContent = ['Disk', ...D.dir.replace(/^disk:\/?/, '').split('/').filter(Boolean)].join(' / ');
+  ok.textContent = folder ? 'Use this folder' : 'Add';
+  if (D.loading || !D.items) { msg.textContent = 'Loading…'; return; }
+  if (D.items.error) { msg.textContent = D.items.error; return; }
+  const rows = [];
+  if (D.dir !== 'disk:/') rows.push(`<button data-dir="${esc(D.dir.replace(/\/[^/]+\/?$/, '') || 'disk:/')}"><svg><use href="#i-back"/></svg><span>Back</span></button>`);
+  for (const d of D.items.dirs) rows.push(`<button data-dir="${esc(d.id)}"><svg><use href="#i-folder"/></svg><span>${esc(d.name)}</span></button>`);
+  if (!folder) {
+    for (const f of D.items.files) {
+      const audio = f.audio || AUD.test(f.name);
+      rows.push(`<label class="${audio ? '' : 'na'}"><input type="checkbox" data-f="${esc(f.id)}"${D.picked.has(f.id) ? ' checked' : ''}${audio ? '' : ' disabled'}>` +
+        `<span>${esc(f.name)}</span><small>${audio ? kb(f.size) : 'not audio'}</small></label>`);
+    }
+  }
+  list.innerHTML = rows.join('');
+  if (!rows.length || (folder && !D.items.dirs.length)) msg.textContent = folder ? 'No folders inside. Shared folders show up once you accept the invite.' : 'This folder is empty.';
+  if (!folder) {
+    $('cdInfo').textContent = D.picked.size ? `${D.picked.size} selected · stays in the cloud` : '';
+    ok.disabled = !D.picked.size;
+  } else ok.disabled = false;
+}
+
+$('cdTabs').onclick = e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  D.p = b.dataset.p; D.items = null; D.picked.clear();
+  renderDlg();
+  if (D.p === 'y' && S.cloud?.connected.y) loadDir();
+};
+$('cdList').onclick = e => {
+  const b = e.target.closest('button[data-dir]');
+  if (b) { D.dir = b.dataset.dir; loadDir(); }
+};
+$('cdList').onchange = e => {
+  const id = e.target.dataset.f;
+  if (!id) return;
+  e.target.checked ? D.picked.add(id) : D.picked.delete(id);
+  renderDlg();
+};
+$('cdMsg').onclick = e => {
+  if (e.target.id !== 'cdConnect') return;
+  const p = D.p;
+  act('c' + p, () => api.cloud.connect(p), `${PN[p]} connected`).then(() => { renderDlg(); if (p === 'y') loadDir(); });
+  renderDlg();
+};
+$('cdCancel').onclick = closeDlg;
+$('cdOk').onclick = async () => {
+  if (D.p === 'g') {
+    const n = await act('pg', () => api.cloud.pickGoogle());
+    renderDlg();
+    if (n != null) { closeDlg(); toast(n ? `Added ${n} song${n === 1 ? '' : 's'}` : 'Nothing new to add'); }
+    return;
+  }
+  if (D.mode === 'folder') {
+    const name = D.dir === 'disk:/' ? 'Disk' : D.dir.split('/').pop();
+    closeDlg();
+    act('f', () => api.cloud.folderSet({ id: D.dir, name }), `Library folder: ${name}`);
+    return;
+  }
+  const files = D.items.files.filter(f => D.picked.has(f.id));
+  closeDlg();
+  act('a', () => api.cloud.add('y', files), n => n ? `Added ${n} song${n === 1 ? '' : 's'}` : 'Nothing new to add');
+};

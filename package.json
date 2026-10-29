@@ -19,6 +19,9 @@
       "main.js",
       "preload.js",
       "ytdlp.js",
+      "drive.js",
+      "cloud.js",
+      "keys.json",
       "src/**"
     ],
     "win": {

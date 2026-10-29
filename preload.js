@@ -19,4 +19,18 @@ contextBridge.exposeInMainWorld('cocoa', {
   onOpenSettings: fn => ipcRenderer.on('open-settings', () => fn()),
   createShortcuts: opts => ipcRenderer.invoke('create-shortcuts', opts),
   dismissWelcome: () => ipcRenderer.invoke('dismiss-welcome'),
+  onOpenCloudImport: fn => ipcRenderer.on('open-cloud-import', () => fn()),
+  cloud: {
+    connect: p => ipcRenderer.invoke('cloud-connect', p),
+    signOut: p => ipcRenderer.invoke('cloud-signout', p),
+    use: p => ipcRenderer.invoke('cloud-use', p),
+    set: o => ipcRenderer.invoke('cloud-set', o),
+    folderGoogle: () => ipcRenderer.invoke('cloud-folder-google'),
+    folderSet: f => ipcRenderer.invoke('cloud-folder-set', f),
+    list: (p, dir) => ipcRenderer.invoke('cloud-list', p, dir),
+    add: (p, files) => ipcRenderer.invoke('cloud-add', p, files),
+    pickGoogle: () => ipcRenderer.invoke('cloud-pick-google'),
+    moveAll: () => ipcRenderer.invoke('cloud-move-all'),
+    sync: () => ipcRenderer.invoke('cloud-sync'),
+  },
 });
