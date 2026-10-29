@@ -14,4 +14,9 @@ contextBridge.exposeInMainWorld('cocoa', {
   trackMenu: (id, playlistId) => ipcRenderer.invoke('track-menu', id, playlistId),
   playlistMenu: id => ipcRenderer.invoke('playlist-menu', id),
   appMenu: () => ipcRenderer.invoke('app-menu'),
+  minimize: () => ipcRenderer.invoke('minimize'),
+  setTheme: t => ipcRenderer.invoke('set-theme', t),
+  onOpenSettings: fn => ipcRenderer.on('open-settings', () => fn()),
+  createShortcuts: opts => ipcRenderer.invoke('create-shortcuts', opts),
+  dismissWelcome: () => ipcRenderer.invoke('dismiss-welcome'),
 });

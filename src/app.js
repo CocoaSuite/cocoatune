@@ -206,6 +206,7 @@ $('toMini').onclick = () => api.setMini(true);
 $('expand').onclick = () => api.setMini(false);
 $('menu').onclick = () => api.appMenu();
 $('close').onclick = () => api.close();
+$('minimize').onclick = () => api.minimize();
 $('addFiles').onclick = () => api.importDialog().catch(toast);
 $('mini').addEventListener('dblclick', e => { if (!e.target.closest('button')) api.setMini(false); });
 
@@ -290,9 +291,78 @@ if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('nexttrack', () => step(1));
 }
 
+// ---------- theme ----------
+const DEFAULT_THEME = { accent: '#D70C0C', bg: '#161616', text: '#F6F1EB' };
+const PRESETS = [
+  ['Cocoa', DEFAULT_THEME],
+  ['Cream', { accent: '#D70C0C', bg: '#F6F1EB', text: '#1C1717' }],
+  ['Mocha', { accent: '#C8743A', bg: '#1D1714', text: '#F3E6DA' }],
+  ['Mint', { accent: '#21A366', bg: '#121615', text: '#EAF4EF' }],
+  ['Ocean', { accent: '#2F7DF6', bg: '#11141A', text: '#E8EEF8' }],
+  ['Grape', { accent: '#9B5CF6', bg: '#151219', text: '#F0EAF8' }],
+];
+let theme = { ...DEFAULT_THEME };
+
+const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const hex = c => '#' + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, t) => { const x = rgb(a), y = rgb(b); return hex(x.map((v, i) => v + (y[i] - v) * t)); };
+const lum = h => { const [r, g, b] = rgb(h); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+
+function applyTheme(t) {
+  theme = { ...DEFAULT_THEME, ...t };
+  const { accent, bg, text } = theme;
+  const dark = lum(bg) < 0.5;
+  const vars = {
+    '--bg': bg, '--text': text, '--red': accent,
+    '--panel': mix(bg, text, 0.03), '--hover': mix(bg, text, 0.025), '--row': mix(bg, text, 0.06),
+    '--line': mix(bg, text, 0.1), '--mut': mix(text, bg, 0.45),
+    '--field': dark ? mix(bg, '#000000', 0.3) : mix(bg, '#ffffff', 0.6),
+    '--red-hi': mix(accent, dark ? '#ffffff' : '#000000', 0.12),
+    '--on-red': lum(accent) > 0.62 ? '#111111' : '#F6F1EB',
+  };
+  for (const [k, v] of Object.entries(vars)) document.documentElement.style.setProperty(k, v);
+  document.querySelectorAll('.sRow input').forEach(i => { i.value = theme[i.dataset.key]; });
+  const key = JSON.stringify(theme).toLowerCase();
+  $('presets').innerHTML = PRESETS.map(([name, p], i) =>
+    `<button class="preset${JSON.stringify({ ...DEFAULT_THEME, ...p }).toLowerCase() === key ? ' a' : ''}" data-i="${i}">` +
+    `<i data-c="${p.accent}"></i>${esc(name)}</button>`).join('');
+  $('presets').querySelectorAll('i').forEach(i => { i.style.background = i.dataset.c; });
+}
+
+let themeTimer;
+function setTheme(t) {
+  applyTheme(t);
+  clearTimeout(themeTimer);
+  themeTimer = setTimeout(() => api.setTheme(theme), 150);
+}
+
+$('presets').onclick = e => { const b = e.target.closest('.preset'); if (b) setTheme(PRESETS[b.dataset.i][1]); };
+document.querySelectorAll('.sRow input').forEach(i => { i.oninput = () => setTheme({ ...theme, [i.dataset.key]: i.value }); });
+$('sReset').onclick = () => setTheme(DEFAULT_THEME);
+$('sBack').onclick = () => document.body.classList.remove('is-settings');
+$('sShortcut').onclick = () => api.createShortcuts({ desktop: true, startMenu: true })
+  .then(() => toast('Shortcuts created')).catch(toast);
+api.onOpenSettings(() => { api.setMini(false); document.body.classList.add('is-settings'); });
+
+// ---------- first-run shortcut prompt ----------
+$('wSkip').onclick = () => { document.body.classList.remove('is-welcome'); api.dismissWelcome(); };
+$('wCreate').onclick = () => {
+  document.body.classList.remove('is-welcome');
+  api.createShortcuts({ desktop: $('wDesktop').checked, startMenu: $('wStart').checked })
+    .then(() => toast('Shortcut created')).catch(toast);
+};
+
+applyTheme(DEFAULT_THEME);
 api.onToast(toast);
+let themeLoaded = false;
 api.onState(s => {
   S = s;
+  if (!themeLoaded) {
+    themeLoaded = true;
+    applyTheme(s.theme || DEFAULT_THEME);
+    document.body.classList.toggle('is-win', !!s.canShortcut);
+    document.body.classList.toggle('is-welcome', !!s.welcome);
+  }
   if (cur && !byId(cur)) { audio.pause(); audio.removeAttribute('src'); cur = null; }
   render();
   probeDurations();

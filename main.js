@@ -57,6 +57,9 @@ function state() {
     jobs: [...jobs.values()],
     pinned,
     mini,
+    theme: db.theme || null,
+    canShortcut: canShortcut(),
+    welcome: canShortcut() && !db.welcomeDone && !shortcutExists(),
   };
 }
 
@@ -157,6 +160,30 @@ async function deleteTrack(id) {
   changed();
 }
 
+// ---------- shortcuts (Windows) ----------
+const canShortcut = () => process.platform === 'win32' && app.isPackaged;
+const shortcutPaths = () => ({
+  desktop: path.join(app.getPath('desktop'), 'CocoaTune.lnk'),
+  startMenu: path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'CocoaTune.lnk'),
+});
+const shortcutExists = () => Object.values(shortcutPaths()).some(p => fs.existsSync(p));
+
+function createShortcuts({ desktop, startMenu }) {
+  if (!canShortcut()) throw new Error('Shortcuts are only available in the Windows app');
+  const opts = {
+    target: process.execPath, cwd: path.dirname(process.execPath), icon: process.execPath, iconIndex: 0,
+    description: 'CocoaTune music player', appUserModelId: 'com.cocoasuite.cocoatune',
+  };
+  const paths = shortcutPaths();
+  const wanted = [desktop && paths.desktop, startMenu && paths.startMenu].filter(Boolean);
+  for (const p of wanted) {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    if (!shell.writeShortcutLink(p, fs.existsSync(p) ? 'replace' : 'create', opts)) throw new Error('Could not create the shortcut');
+  }
+  db.welcomeDone = true;
+  saveDb();
+}
+
 // ---------- window ----------
 function setBoundsSafe(b) {
   win.setResizable(true);
@@ -193,6 +220,7 @@ function createWindow() {
     maximizable: false,
     fullscreenable: false,
     title: 'CocoaTune',
+    icon: path.join(__dirname, 'src', 'icon.png'),
     show: false,
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
@@ -225,6 +253,13 @@ ipcMain.handle('set-pinned', (_, on) => {
 });
 ipcMain.handle('set-mini', (_, on) => setMini(!!on));
 ipcMain.handle('close', () => win.close());
+ipcMain.handle('minimize', () => win.minimize());
+ipcMain.handle('set-theme', (_, t) => {
+  const ok = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+  if (t && ok(t.accent) && ok(t.bg) && ok(t.text)) { db.theme = { accent: t.accent, bg: t.bg, text: t.text }; saveDb(); }
+});
+ipcMain.handle('create-shortcuts', (_, o) => createShortcuts(o || {}));
+ipcMain.handle('dismiss-welcome', () => { db.welcomeDone = true; saveDb(); });
 
 ipcMain.handle('playlist-create', (_, name) => {
   const p = { id: uid(), name: String(name).trim().slice(0, 60) || 'Playlist', trackIds: [] };
@@ -265,6 +300,7 @@ ipcMain.handle('playlist-menu', (_, id) => {
 ipcMain.handle('app-menu', () => {
   Menu.buildFromTemplate([
     { label: 'Add files…', click: importDialog },
+    { label: 'Settings', click: () => win.webContents.send('open-settings') },
     { label: 'Open library folder', click: () => shell.openPath(dataDir()) },
     {
       label: 'Update link downloader',
@@ -288,6 +324,7 @@ if (!app.requestSingleInstanceLock()) {
     win.focus();
   });
   app.whenReady().then(async () => {
+    if (process.platform === 'win32') app.setAppUserModelId('com.cocoasuite.cocoatune');
     await loadDb();
     createWindow();
     ytdlp.update().catch(() => {}); // quiet background refresh
