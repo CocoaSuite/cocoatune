@@ -1,0 +1,29 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx electron-builder --win zip nsis --publish never
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: CocoaTune (latest build)
+          prerelease: true
+          make_latest: false
+          files: |
+            dist/*.zip
+            dist/*.exe

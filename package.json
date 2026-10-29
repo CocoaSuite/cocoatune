@@ -15,9 +15,27 @@
   "build": {
     "appId": "com.cocoasuite.cocoatune",
     "productName": "CocoaTune",
-    "files": ["main.js", "preload.js", "ytdlp.js", "src/**"],
-    "win": { "target": "nsis" },
-    "mac": { "target": "dmg" },
-    "linux": { "target": "AppImage" }
+    "files": [
+      "main.js",
+      "preload.js",
+      "ytdlp.js",
+      "src/**"
+    ],
+    "win": {
+      "target": [
+        "zip",
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }
