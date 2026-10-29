@@ -104,7 +104,7 @@ body.has-pill .sBody, body.has-pill .list { padding-bottom: 52px; }
 .prog::after { content: ""; position: absolute; left: 0; right: 0; top: 4px; height: 3px; background: var(--line); }
 .prog i { position: absolute; z-index: 1; left: 0; top: 4px; height: 3px; width: 0; background: var(--red); }
 .prog:hover::after, .prog:hover i { top: 3px; height: 5px; }
-.ctl { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.ctl { position: relative; display: flex; align-items: center; justify-content: center; gap: 14px; }
 .cb { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; position: relative; }
 .cb svg { width: 16px; height: 16px; }
 .cb:hover { background: var(--row); }
@@ -227,3 +227,16 @@ body.is-mini .dlg { display: none; }
 .fl label.na { opacity: .45; cursor: default; }
 .dfoot { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
 .dfoot span { flex: 1; font-size: 11px; color: var(--mut); }
+
+/* ---------- volume ---------- */
+.vb { position: absolute; right: 0; top: 50%; transform: translateY(-50%); color: var(--text); }
+.vb.open { background: var(--row); }
+.vpop { display: none; position: absolute; right: -4px; bottom: 40px; z-index: 5; width: 36px; height: 132px; padding: 10px 0 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; flex-direction: column; align-items: center; gap: 6px; }
+.vpop.open { display: flex; }
+.vtr { position: relative; width: 4px; flex: 1; background: var(--line); border-radius: 2px; cursor: pointer; }
+.vtr::before { content: ""; position: absolute; inset: 0 -12px; }
+.vtr i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--red); border-radius: 2px; }
+.vtr b { position: absolute; left: 50%; width: 12px; height: 12px; margin: 0 0 -6px -6px; border-radius: 50%; background: var(--text); }
+.vpop small { font-size: 10px; color: var(--mut); font-variant-numeric: tabular-nums; }
+.vpop.muted i { background: var(--mut); }

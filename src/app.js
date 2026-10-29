@@ -305,6 +305,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); toggle(); }
   if (e.code === 'ArrowRight' && audio.duration) audio.currentTime = Math.min(audio.duration, audio.currentTime + 5);
   if (e.code === 'ArrowLeft') audio.currentTime = Math.max(0, audio.currentTime - 5);
+  if (e.code === 'ArrowUp' || e.code === 'ArrowDown') { e.preventDefault(); setVol((muted ? 0 : vol) + (e.code === 'ArrowUp' ? 0.05 : -0.05)); }
 });
 
 if ('mediaSession' in navigator) {
@@ -376,6 +377,45 @@ $('wCreate').onclick = () => {
 };
 
 applyTheme(DEFAULT_THEME);
+// ---------- volume ----------
+let vol = 0.8, muted = false;
+try { const v = JSON.parse(localStorage.getItem('ct-volume')); if (v) { vol = Math.min(1, Math.max(0, +v.vol || 0)); muted = !!v.muted; } } catch { /* defaults */ }
+
+function applyVol(save = true) {
+  audio.volume = vol;
+  audio.muted = muted;
+  const shown = muted ? 0 : vol;
+  $('vfill').style.height = shown * 100 + '%';
+  $('vknob').style.bottom = shown * 100 + '%';
+  $('vval').textContent = muted ? 'Mute' : Math.round(vol * 100);
+  $('vpop').classList.toggle('muted', muted);
+  icon($('vol'), muted || vol === 0 ? 'mute' : vol < 0.5 ? 'vol-low' : 'vol');
+  $('vol').title = muted ? 'Volume: muted' : `Volume: ${Math.round(vol * 100)}`;
+  if (save) { try { localStorage.setItem('ct-volume', JSON.stringify({ vol, muted })); } catch { /* not saved */ } }
+}
+function setVol(v) { vol = Math.min(1, Math.max(0, Math.round(v * 100) / 100)); muted = false; applyVol(); }
+const nudge = e => { e.preventDefault(); setVol((muted ? 0 : vol) + (e.deltaY < 0 ? 0.05 : -0.05)); };
+function showVol(on) { $('vpop').classList.toggle('open', on); $('vol').classList.toggle('open', on); }
+
+$('vol').onclick = e => { e.stopPropagation(); showVol(!$('vpop').classList.contains('open')); };
+$('vol').ondblclick = () => { muted = !muted; applyVol(); };
+$('vol').addEventListener('wheel', nudge, { passive: false });
+$('vpop').addEventListener('wheel', nudge, { passive: false });
+$('mini').addEventListener('wheel', nudge, { passive: false });
+$('vpop').onclick = e => e.stopPropagation();
+document.addEventListener('click', () => showVol(false));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') showVol(false); });
+
+const volFrom = e => { const r = $('vtr').getBoundingClientRect(); return (r.bottom - e.clientY) / r.height; };
+$('vtr').addEventListener('pointerdown', e => {
+  $('vtr').setPointerCapture(e.pointerId);
+  setVol(volFrom(e));
+  const move = ev => setVol(volFrom(ev));
+  $('vtr').addEventListener('pointermove', move);
+  $('vtr').addEventListener('pointerup', () => $('vtr').removeEventListener('pointermove', move), { once: true });
+});
+applyVol(false);
+
 api.onToast(toast);
 api.onOpenCloudImport(() => { api.setMini(false); openDlg('import', S.cloud?.p || 'g'); });
 let themeLoaded = false;
